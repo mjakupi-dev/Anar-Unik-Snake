@@ -18,6 +18,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnDifficulty: MaterialButton
     private lateinit var btnTheme: MaterialButton
     private lateinit var btnLeaderboard: MaterialButton
+    private lateinit var btnUpdate: MaterialButton
 
     private lateinit var leaderboardManager: LeaderboardManager
     private lateinit var settingsPrefs: android.content.SharedPreferences
@@ -29,8 +30,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Keep all controls clear of Android's status and navigation bars,
-        // including gesture navigation and three-button navigation.
         val root = findViewById<View>(R.id.rootLayout)
         val basePadding = (8 * resources.displayMetrics.density).toInt()
         root.setOnApplyWindowInsetsListener { view, insets ->
@@ -61,14 +60,13 @@ class MainActivity : AppCompatActivity() {
         btnDifficulty = findViewById(R.id.btnDifficulty)
         btnTheme = findViewById(R.id.btnTheme)
         btnLeaderboard = findViewById(R.id.btnLeaderboard)
+        btnUpdate = findViewById(R.id.btnUpdate)
 
-        // D-pad
         findViewById<Button>(R.id.btnUp).setOnClickListener { gameView.setDirection(SnakeGameView.Direction.UP) }
         findViewById<Button>(R.id.btnDown).setOnClickListener { gameView.setDirection(SnakeGameView.Direction.DOWN) }
         findViewById<Button>(R.id.btnLeft).setOnClickListener { gameView.setDirection(SnakeGameView.Direction.LEFT) }
         findViewById<Button>(R.id.btnRight).setOnClickListener { gameView.setDirection(SnakeGameView.Direction.RIGHT) }
 
-        // Score callback
         gameView.onScoreChanged = { score, highScore ->
             runOnUiThread {
                 tvScore.text = "Score: $score"
@@ -76,12 +74,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Game over → save to leaderboard
         gameView.onGameOver = { finalScore ->
             leaderboardManager.addScore(finalScore)
         }
 
-        // Buttons
         btnPause.setOnClickListener {
             if (gameView.isPaused) {
                 gameView.resumeGame()
@@ -100,12 +96,17 @@ class MainActivity : AppCompatActivity() {
         btnDifficulty.setOnClickListener { showDifficultyDialog() }
         btnTheme.setOnClickListener { cycleTheme() }
         btnLeaderboard.setOnClickListener { showLeaderboard() }
+        btnUpdate.setOnClickListener {
+            UpdateManager.checkForUpdates(this, BuildConfig.VERSION_NAME, showUpToDate = true)
+        }
 
-        // Restore saved settings.
         gameView.setDifficulty(currentDifficulty)
         gameView.setTheme(Themes.all[currentThemeIndex])
         btnDifficulty.text = currentDifficulty.label
         btnTheme.text = Themes.all[currentThemeIndex].name
+
+        // Quietly check for a new published APK each time the game opens.
+        UpdateManager.checkForUpdates(this, BuildConfig.VERSION_NAME)
     }
 
     private fun showDifficultyDialog() {
