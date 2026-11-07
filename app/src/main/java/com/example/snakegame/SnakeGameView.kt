@@ -68,8 +68,24 @@ class SnakeGameView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
     private val scalePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x33000000
+        color = 0x22000000
         style = Paint.Style.FILL
+    }
+    private val bodyOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val bodyStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val bodyShinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x55FFFFFF
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
     }
     private val eyeWhitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFFFFFFF.toInt()
@@ -370,68 +386,112 @@ class SnakeGameView @JvmOverloads constructor(
         )
     }
 
+    // Draw the body as a continuous, rounded, gently curving form instead of
+    // separate circles. Split at screen-wrap points so the body never draws
+    // a long line across the entire playfield.
     private fun drawSnake(canvas: Canvas) {
-        val inset = cellSize * 0.075f
-        val radius = cellSize * 0.34f
+        if (snake.isEmpty()) return
 
-        // Draw the tail first so the head naturally sits above the body.
+        val bodyWidth = cellSize * 0.76f
+        bodyOutlinePaint.strokeWidth = bodyWidth + cellSize * 0.12f
+        bodyOutlinePaint.color = 0x66000000
+        bodyStrokePaint.strokeWidth = bodyWidth
+        bodyStrokePaint.color = currentTheme.body
+        bodyShinePaint.strokeWidth = cellSize * 0.13f
+
+        var run = mutableListOf<Point>()
+        fun drawRun(points: List<Point>) {
+            if (points.isEmpty()) return
+            val path = Path()
+            val first = points.first()
+            path.moveTo(
+                offsetX + (first.x + 0.5f) * cellSize,
+                offsetY + (first.y + 0.5f) * cellSize
+            )
+            if (points.size == 1) {
+                val x = offsetX + (first.x + 0.5f) * cellSize
+                val y = offsetY + (first.y + 0.5f) * cellSize
+                canvas.drawCircle(x, y, bodyWidth / 2f, bodyStrokePaint.apply {
+                    style = Paint.Style.FILL
+                })
+                bodyStrokePaint.style = Paint.Style.STROKE
+                return
+            }
+            for (i in 1 until points.size) {
+                val previous = points[i - 1]
+                val current = points[i]
+                val x1 = offsetX + (previous.x + 0.5f) * cellSize
+                val y1 = offsetY + (previous.y + 0.5f) * cellSize
+                val x2 = offsetX + (current.x + 0.5f) * cellSize
+                val y2 = offsetY + (current.y + 0.5f) * cellSize
+                if (i == 1) path.lineTo((x1 + x2) / 2f, (y1 + y2) / 2f)
+                else {
+                    val before = points[i - 2]
+                    val bx = offsetX + (before.x + 0.5f) * cellSize
+                    val by = offsetY + (before.y + 0.5f) * cellSize
+                    path.quadTo(bx, by, (x1 + x2) / 2f, (y1 + y2) / 2f)
+                }
+            }
+            val last = points.last()
+            path.lineTo(
+                offsetX + (last.x + 0.5f) * cellSize,
+                offsetY + (last.y + 0.5f) * cellSize
+            )
+            canvas.drawPath(path, bodyOutlinePaint)
+            canvas.drawPath(path, bodyStrokePaint)
+
+            // A narrow highlight gives the body a rounded, living surface.
+            val shine = Path(path)
+            canvas.drawPath(shine, bodyShinePaint)
+        }
+
+        // Traverse tail-to-neck and break the path wherever the snake wraps.
         for (i in snake.lastIndex downTo 1) {
-            val rect = cellRect(snake[i], inset)
-            canvas.drawRoundRect(rect, radius, radius, bodyPaint)
+            val point = snake[i]
+            if (run.isNotEmpty()) {
+                val previous = run.last()
+                if (abs(point.x - previous.x) > 1 || abs(point.y - previous.y) > 1) {
+                    drawRun(run)
+                    run = mutableListOf()
+                }
+            }
+            run.add(point)
+        }
+        drawRun(run)
 
-            // Glossy upper edge and small scale details give each segment depth.
-            canvas.drawRoundRect(
-                RectF(rect.left + cellSize * 0.10f, rect.top + cellSize * 0.08f,
-                    rect.right - cellSize * 0.10f, rect.top + cellSize * 0.30f),
-                cellSize * 0.12f, cellSize * 0.12f, highlightPaint
-            )
-            val cx = rect.centerX()
-            val cy = rect.centerY()
-            canvas.drawCircle(cx, cy + cellSize * 0.12f, cellSize * 0.045f, scalePaint)
+        // The head is a single elongated shape aligned with the direction of travel.
+        val head = snake.first()
+        val cx = offsetX + (head.x + 0.5f) * cellSize
+        val cy = offsetY + (head.y + 0.5f) * cellSize
+        val headLength = cellSize * 1.12f
+        val headWidth = cellSize * 0.88f
+        val rotation = when (direction) {
+            Direction.RIGHT -> 0f
+            Direction.DOWN -> 90f
+            Direction.LEFT -> 180f
+            Direction.UP -> 270f
         }
 
-        val head = snake.firstOrNull() ?: return
-        val rect = cellRect(head, inset * 0.55f)
-        canvas.drawRoundRect(rect, cellSize * 0.40f, cellSize * 0.40f, headPaint)
-        canvas.drawRoundRect(
-            RectF(rect.left + cellSize * 0.12f, rect.top + cellSize * 0.08f,
-                rect.right - cellSize * 0.12f, rect.top + cellSize * 0.28f),
-            cellSize * 0.16f, cellSize * 0.16f, highlightPaint
+        canvas.save()
+        canvas.rotate(rotation, cx, cy)
+        val headRect = RectF(
+            cx - headLength * 0.52f,
+            cy - headWidth / 2f,
+            cx + headLength * 0.52f,
+            cy + headWidth / 2f
         )
-        drawSnakeEyes(canvas, rect)
-    }
+        canvas.drawRoundRect(headRect, headWidth * 0.48f, headWidth * 0.48f, headPaint)
 
-    private fun drawSnakeEyes(canvas: Canvas, headRect: RectF) {
-        val cx = headRect.centerX()
-        val cy = headRect.centerY()
-        val forwardX = when (direction) {
-            Direction.LEFT -> -1f
-            Direction.RIGHT -> 1f
-            else -> 0f
-        }
-        val forwardY = when (direction) {
-            Direction.UP -> -1f
-            Direction.DOWN -> 1f
-            else -> 0f
-        }
-        val sideX = -forwardY
-        val sideY = forwardX
-        val eyeForward = cellSize * 0.13f
-        val eyeSide = cellSize * 0.19f
+        // Two expressive eyes sit near the front of the head, not on its sides.
+        val eyeX = cx + headLength * 0.22f
+        val eyeOffset = headWidth * 0.29f
         val eyeRadius = cellSize * 0.105f
-        val pupilRadius = cellSize * 0.055f
-
         for (side in listOf(-1f, 1f)) {
-            val ex = cx + forwardX * eyeForward + sideX * eyeSide * side
-            val ey = cy + forwardY * eyeForward + sideY * eyeSide * side
-            canvas.drawCircle(ex, ey, eyeRadius, eyeWhitePaint)
-            canvas.drawCircle(
-                ex + forwardX * cellSize * 0.035f,
-                ey + forwardY * cellSize * 0.035f,
-                pupilRadius,
-                pupilPaint
-            )
+            val ey = cy + eyeOffset * side
+            canvas.drawCircle(eyeX, ey, eyeRadius, eyeWhitePaint)
+            canvas.drawCircle(eyeX + cellSize * 0.035f, ey, eyeRadius * 0.52f, pupilPaint)
         }
+        canvas.restore()
     }
 
     private fun drawFood(canvas: Canvas) {
