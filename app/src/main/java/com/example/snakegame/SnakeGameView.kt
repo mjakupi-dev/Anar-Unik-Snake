@@ -120,14 +120,8 @@ class SnakeGameView @JvmOverloads constructor(
             .setAudioAttributes(attrs)
             .build()
 
-        // Try to load real sounds from res/raw (optional)
-        // If files don't exist, we fall back to system tones later
-        try {
-            // Uncomment these lines after adding files to res/raw/
-            // soundEat = soundPool?.load(context, R.raw.eat, 1) ?: 0
-            // soundDie = soundPool?.load(context, R.raw.die, 1) ?: 0
-            // soundMove = soundPool?.load(context, R.raw.move, 1) ?: 0
-        } catch (_: Exception) {}
+        // Real sound files can be loaded here when res/raw assets are added.
+        // Until then, playEat() and playDie() use system tone fallbacks.
     }
 
     // ========== Public API ==========
@@ -143,12 +137,12 @@ class SnakeGameView @JvmOverloads constructor(
     }
 
     fun setDirection(dir: Direction) {
-        // Prevent 180° turns
+        // Compare with the queued direction so rapid inputs cannot reverse the snake.
         when (dir) {
-            Direction.UP    -> if (direction != Direction.DOWN) nextDirection = dir
-            Direction.DOWN  -> if (direction != Direction.UP) nextDirection = dir
-            Direction.LEFT  -> if (direction != Direction.RIGHT) nextDirection = dir
-            Direction.RIGHT -> if (direction != Direction.LEFT) nextDirection = dir
+            Direction.UP    -> if (nextDirection != Direction.DOWN) nextDirection = dir
+            Direction.DOWN  -> if (nextDirection != Direction.UP) nextDirection = dir
+            Direction.LEFT  -> if (nextDirection != Direction.RIGHT) nextDirection = dir
+            Direction.RIGHT -> if (nextDirection != Direction.LEFT) nextDirection = dir
         }
     }
 
@@ -209,10 +203,15 @@ class SnakeGameView @JvmOverloads constructor(
             Direction.RIGHT -> Point(head.x + 1, head.y)
         }
 
+        val willEat = newHead == food
+        // The tail moves away on a normal step, so entering its current cell is legal.
+        // If food is eaten, the tail stays in place and must still count as a collision.
+        val occupiedBody = if (willEat) snake else snake.dropLast(1)
+
         // Wall or self collision
         if (newHead.x !in 0 until gridSize ||
             newHead.y !in 0 until gridSize ||
-            snake.contains(newHead)
+            occupiedBody.contains(newHead)
         ) {
             gameOver()
             return
@@ -220,7 +219,7 @@ class SnakeGameView @JvmOverloads constructor(
 
         snake.add(0, newHead)
 
-        if (newHead == food) {
+        if (willEat) {
             score += 10
             if (score > highScore) {
                 highScore = score
@@ -252,7 +251,6 @@ class SnakeGameView @JvmOverloads constructor(
         if (soundEat != 0) {
             soundPool?.play(soundEat, 1f, 1f, 1, 0, 1f)
         } else {
-            // Fallback tone
             try {
                 android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 90)
                     .startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 60)
@@ -378,5 +376,6 @@ class SnakeGameView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         handler.removeCallbacks(gameRunnable)
         soundPool?.release()
+        soundPool = null
     }
 }
