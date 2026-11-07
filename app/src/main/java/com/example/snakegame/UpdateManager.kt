@@ -21,7 +21,6 @@ object UpdateManager {
     )
 
     fun checkForUpdates(context: Context, currentVersion: String, showUpToDate: Boolean = false) {
-        val appContext = context.applicationContext
         Thread {
             var connection: HttpURLConnection? = null
             try {
@@ -61,10 +60,11 @@ object UpdateManager {
                 val isNewer = compareVersions(release.version, currentVersion) > 0
 
                 val activity = context as? android.app.Activity
-                activity?.runOnUiThread {
-                    if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                activity?.let { host ->
+                    host.runOnUiThread {
+                    if (host.isFinishing || host.isDestroyed) return@runOnUiThread
                     if (isNewer) {
-                        AlertDialog.Builder(context)
+                        AlertDialog.Builder(host)
                             .setTitle("Snake Game update available")
                             .setMessage(
                                 "Version ${release.version} is available. You have version $currentVersion.\n\n" +
@@ -73,19 +73,22 @@ object UpdateManager {
                             )
                             .setNegativeButton("Later", null)
                             .setPositiveButton("Update") { _, _ ->
-                                download(context, release)
+                                download(host, release)
                             }
                             .show()
                     } else if (showUpToDate) {
-                        Toast.makeText(context, "You already have the latest version.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(host, "You already have the latest version.", Toast.LENGTH_SHORT).show()
+                    }
                     }
                 }
             } catch (e: Exception) {
                 if (showUpToDate) {
                     val activity = context as? android.app.Activity
-                    activity?.runOnUiThread {
-                        if (!activity.isFinishing && !activity.isDestroyed) {
-                            Toast.makeText(context, "Couldn't check for updates. Try again later.", Toast.LENGTH_LONG).show()
+                    activity?.let { host ->
+                        host.runOnUiThread {
+                            if (!host.isFinishing && !host.isDestroyed) {
+                                Toast.makeText(host, "Couldn't check for updates. Try again later.", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 }
