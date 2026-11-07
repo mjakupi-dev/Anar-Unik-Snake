@@ -31,7 +31,8 @@ class LeaderboardManager(context: Context) {
     }
 
     private fun save(entries: List<LeaderboardEntry>) {
-        val raw = entries.joinToString("|") { "\( {it.score}; \){it.date}" }
+        // Keep the same delimiter format used by getEntries().
+        val raw = entries.joinToString("|") { "${it.score};${it.date}" }
         prefs.edit().putString("entries", raw).apply()
     }
 
