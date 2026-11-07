@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnLeaderboard: MaterialButton
 
     private lateinit var leaderboardManager: LeaderboardManager
+    private lateinit var settingsPrefs: android.content.SharedPreferences
 
     private var currentDifficulty = Difficulty.MEDIUM
     private var currentThemeIndex = 0
@@ -28,6 +29,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         leaderboardManager = LeaderboardManager(this)
+        settingsPrefs = getSharedPreferences("SnakeSettings", MODE_PRIVATE)
+
+        currentDifficulty = Difficulty.values().firstOrNull {
+            it.name == settingsPrefs.getString("difficulty", Difficulty.MEDIUM.name)
+        } ?: Difficulty.MEDIUM
+        currentThemeIndex = settingsPrefs.getInt("theme_index", 0)
+            .coerceIn(0, Themes.all.lastIndex)
 
         gameView = findViewById(R.id.gameView)
         tvScore = findViewById(R.id.tvScore)
@@ -77,18 +85,20 @@ class MainActivity : AppCompatActivity() {
         btnTheme.setOnClickListener { cycleTheme() }
         btnLeaderboard.setOnClickListener { showLeaderboard() }
 
-        // Initial setup
+        // Restore saved settings.
         gameView.setDifficulty(currentDifficulty)
         gameView.setTheme(Themes.all[currentThemeIndex])
         btnDifficulty.text = currentDifficulty.label
+        btnTheme.text = Themes.all[currentThemeIndex].name
     }
 
     private fun showDifficultyDialog() {
-        val levels = Difficulty.entries.map { it.label }.toTypedArray()
+        val levels = Difficulty.values().map { it.label }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Select Difficulty")
             .setItems(levels) { _, which ->
-                currentDifficulty = Difficulty.entries[which]
+                currentDifficulty = Difficulty.values()[which]
+                settingsPrefs.edit().putString("difficulty", currentDifficulty.name).apply()
                 gameView.setDifficulty(currentDifficulty)
                 btnDifficulty.text = currentDifficulty.label
                 gameView.restartGame()
@@ -100,6 +110,7 @@ class MainActivity : AppCompatActivity() {
     private fun cycleTheme() {
         currentThemeIndex = (currentThemeIndex + 1) % Themes.all.size
         val theme = Themes.all[currentThemeIndex]
+        settingsPrefs.edit().putInt("theme_index", currentThemeIndex).apply()
         gameView.setTheme(theme)
         btnTheme.text = theme.name
     }
