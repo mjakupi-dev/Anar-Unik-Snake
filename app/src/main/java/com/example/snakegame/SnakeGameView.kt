@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Handler
+import android.os.SystemClock
 import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -18,6 +19,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.abs
+import kotlin.math.sin
 import kotlin.random.Random
 
 class SnakeGameView @JvmOverloads constructor(
@@ -129,6 +131,24 @@ class SnakeGameView @JvmOverloads constructor(
         }
     }
 
+    // A lightweight frame loop animates the food glow without changing
+    // the grid-based collision and movement logic.
+    private val animationRunnable = object : Runnable {
+        override fun run() {
+            if (!isPaused && !isGameOver && isAttachedToWindow) {
+                postInvalidateOnAnimation()
+                handler.postDelayed(this, 16L)
+            }
+        }
+    }
+
+    private fun startVisualAnimation() {
+        handler.removeCallbacks(animationRunnable)
+        if (!isPaused && !isGameOver && isAttachedToWindow) {
+            handler.post(animationRunnable)
+        }
+    }
+
     // ========== Sound & Vibration ==========
     private var soundPool: SoundPool? = null
     private var soundEat = 0
@@ -195,10 +215,14 @@ class SnakeGameView @JvmOverloads constructor(
 
     fun pauseGame() {
         isPaused = true
+        handler.removeCallbacks(animationRunnable)
     }
 
     fun resumeGame() {
-        if (!isGameOver) isPaused = false
+        if (!isGameOver) {
+            isPaused = false
+            startVisualAnimation()
+        }
     }
 
     // ========== Core logic ==========
@@ -220,6 +244,7 @@ class SnakeGameView @JvmOverloads constructor(
 
         handler.removeCallbacks(gameRunnable)
         handler.post(gameRunnable)
+        startVisualAnimation()
     }
 
     private fun spawnFood() {
@@ -284,6 +309,7 @@ class SnakeGameView @JvmOverloads constructor(
 
     private fun gameOver() {
         isGameOver = true
+        handler.removeCallbacks(animationRunnable)
         playDie()
         onGameOver?.invoke(score)
         invalidate()
@@ -498,13 +524,17 @@ class SnakeGameView @JvmOverloads constructor(
         val cx = offsetX + (food.x + 0.5f) * cellSize
         val cy = offsetY + (food.y + 0.53f) * cellSize
         val r = cellSize * 0.31f
+        val pulse = 1f + 0.07f * sin(SystemClock.uptimeMillis() / 230f)
 
-        // Soft halo behind the fruit.
+        // Soft, gently breathing halo behind the fruit.
         val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = currentTheme.food
             alpha = 55
         }
-        canvas.drawCircle(cx, cy, r * 1.45f, haloPaint)
+        canvas.drawCircle(cx, cy, r * 1.45f * pulse, haloPaint)
+
+        canvas.save()
+        canvas.scale(pulse, pulse, cx, cy)
 
         // Two overlapping lobes make the food look like a small glossy apple.
         canvas.drawCircle(cx - r * 0.38f, cy, r * 0.72f, foodPaint)
@@ -522,6 +552,7 @@ class SnakeGameView @JvmOverloads constructor(
             quadTo(cx + r * 0.35f, cy - r * 0.58f, cx + r * 0.08f, cy - r * 0.95f)
         }
         canvas.drawPath(leaf, foodLeafPaint)
+        canvas.restore()
     }
 
     // ========== Touch (swipe) ==========
@@ -548,8 +579,14 @@ class SnakeGameView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        startVisualAnimation()
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        handler.removeCallbacks(animationRunnable)
         handler.removeCallbacks(gameRunnable)
         soundPool?.release()
         soundPool = null
