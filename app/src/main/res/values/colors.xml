@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="background">#FF0D1117</color>
+    <color name="grid">#FF161B22</color>
+    <color name="snake_head">#FF3FB950</color>
+    <color name="snake_body">#FF238636</color>
+    <color name="food">#FFF85149</color>
+    <color name="text">#FFE6EDF3</color>
+    <color name="accent">#FF58A6FF</color>
+</resources>
