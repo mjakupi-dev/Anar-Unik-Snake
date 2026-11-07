@@ -60,8 +60,9 @@ object UpdateManager {
                 )
                 val isNewer = compareVersions(release.version, currentVersion) > 0
 
-                (context as? android.app.Activity)?.runOnUiThread {
-                    if (context.isFinishing || context.isDestroyed) return@runOnUiThread
+                val activity = context as? android.app.Activity
+                activity?.runOnUiThread {
+                    if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                     if (isNewer) {
                         AlertDialog.Builder(context)
                             .setTitle("Snake Game update available")
@@ -81,8 +82,9 @@ object UpdateManager {
                 }
             } catch (e: Exception) {
                 if (showUpToDate) {
-                    (context as? android.app.Activity)?.runOnUiThread {
-                        if (!context.isFinishing && !context.isDestroyed) {
+                    val activity = context as? android.app.Activity
+                    activity?.runOnUiThread {
+                        if (!activity.isFinishing && !activity.isDestroyed) {
                             Toast.makeText(context, "Couldn't check for updates. Try again later.", Toast.LENGTH_LONG).show()
                         }
                     }
