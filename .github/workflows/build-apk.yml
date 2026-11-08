@@ -10,10 +10,8 @@ permissions:
 
 jobs:
   build:
-    name: Build and publish APK
+    name: Build and publish signed APK
     runs-on: ubuntu-latest
-    env:
-      HAS_SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -29,16 +27,22 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare signing key
-        if: env.HAS_SIGNING_KEY != ''
+      - name: Validate signing secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          test -n "$KEYSTORE_BASE64" || { echo "Missing ANDROID_KEYSTORE_BASE64"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "Missing ANDROID_KEY_ALIAS"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Missing ANDROID_KEY_PASSWORD"; exit 1; }
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/snake-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/snake-release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/snake-release.jks" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
-        if: env.HAS_SIGNING_KEY != ''
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -49,13 +53,10 @@ jobs:
             -PappVersionName=2.1.$GITHUB_RUN_NUMBER
           cp app/build/outputs/apk/release/app-release.apk Anar-Unik-Snake.apk
 
-      - name: Build debug APK (temporary signing fallback)
-        if: env.HAS_SIGNING_KEY == ''
+      - name: Verify APK signature
         run: |
-          gradle --no-daemon assembleDebug \
-            -PappVersionCode=$((100 + $GITHUB_RUN_NUMBER)) \
-            -PappVersionName=2.1.$GITHUB_RUN_NUMBER
-          cp app/build/outputs/apk/debug/app-debug.apk Anar-Unik-Snake.apk
+          apksigner verify --verbose Anar-Unik-Snake.apk
+          apksigner verify --print-certs Anar-Unik-Snake.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -72,7 +73,7 @@ jobs:
           name: Anar-Unik Snake 2.1.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           body: |
-            Automatic Android APK release from commit ${{ github.sha }}.
+            Signed Android APK release from commit ${{ github.sha }}.
 
             Download **Anar-Unik-Snake.apk** and install it on your Android device.
           files: Anar-Unik-Snake.apk
